@@ -1,0 +1,38 @@
+library(edgeR)
+setwd("/home/chengchen/data/DBA_project/rpl11")
+
+count <- read.delim("rpl11-countmatrix.txt")
+colnames(count) = c("geneid","control","rpl11mo")
+rownames(count) = count$geneid
+count= count[,2:3]
+
+bcv <- 0.2
+y <- DGEList(counts=count, group=1:2)
+keep <- rowSums(cpm(y)>1) >= 1
+y <- y[keep, , keep.lib.sizes=FALSE]
+y <- calcNormFactors(y)
+
+y_bca = y
+bcv = 0.1
+et = exactTest(y_bca,dispersion = bcv^2)
+
+allgenes = et$table
+allgenes= allgenes[order(allgenes$PValue),]
+
+ids = rownames(allgenes)
+###get zfin_gene_symbol for ensembl genes
+library("biomaRt")
+ensembl=useMart("ensembl")
+ensembl=useDataset("drerio_gene_ensembl",mart=ensembl)
+symbols <- getBM(attributes=c('ensembl_gene_id','entrezgene_id','zfin_id_symbol', 'wikigene_description','name_1006'),filters='ensembl_gene_id',values=ids, mart=ensembl)
+#entrezgene is ENTREZID
+symbols=symbols[!duplicated(symbols$ensembl_gene_id),]
+res05_lfc = as.data.frame(allgenes)
+res05_lfc$ensembl_gene_id = rownames(res05_lfc)
+res05_lfc = merge(res05_lfc,symbols, by="ensembl_gene_id")
+#res05_lfc=res05_lfc[,-7] #remove ensembl_gene_id column
+res05_lfc_ordered = res05_lfc[order(res05_lfc$logFC),]
+head(res05_lfc_ordered)
+#res05ordered_lfc$symbol = mapIds(org.Dr.eg.db,keys = row.names(res05ordered_lfc),column = "SYMBOL",keytype = "ENSEMBL", multiVals="first")
+#data for VennDiagram analysis
+write.csv(res05_lfc_ordered,file="rps19morphant_vs_CtlDEG.csv") 
